@@ -54,22 +54,29 @@ class UnityUnpack
 			if( e == null ) break;
 
 			var size = e.fileSize;
+			var fname = e.fileName;
 
 			var asset_name = ~/([0-9a-f]+)/i;
 
-			if (!paxheader.match(e.fileName) && asset_name.match(e.fileName)) { 
+			if (!paxheader.match(fname) && asset_name.match(fname)) { 
 				var assetName = asset_name.matched(1);
 
 				// Remeber content position
 				var a = assets.get(assetName);
 				if (a == null) { a = { }; assets.set(assetName, a); }
 
-				if (asset_content.match(e.fileName)) {
+				if (asset_content.match(fname)) {
 					a.content_offset = tarinput.position;
 					a.size = e.fileSize;
-				} else if (asset_path.match(e.fileName)) {
- 					var pos = tarinput.position;
-					a.path = tarinput.readString(size);
+				} else if (asset_path.match(fname)) {
+					var pos = tarinput.position;
+					var path = tarinput.readString(size);
+
+					if (path.indexOf('\n') >= 0) {
+						path = path.split('\n')[0];
+					}
+
+					a.path = path;
 					tarinput.position = pos;
 				}
 			}
