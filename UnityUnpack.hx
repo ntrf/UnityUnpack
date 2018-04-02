@@ -7,6 +7,8 @@ typedef AssetDesc = {
 	@:optional var path : String;
 	@:optional var content_offset : Int;
 	@:optional var size : Int;
+	@:optional var meta_offset : Int;
+	@:optional var meta_size : Int;
 };
 
 class UnityUnpack
@@ -15,6 +17,7 @@ class UnityUnpack
 
 	static var asset_content = ~/\/asset$/i;
 	static var asset_path = ~/\/pathname$/i;
+	static var asset_meta = ~/\/asset\.meta$/i;
 
 	static function main()
 	{
@@ -22,15 +25,30 @@ class UnityUnpack
 
 		if (args.length <= 0) {
 			Sys.println("Unity package unpacker\n");
-			Sys.println("Usage:\n    unityunpack <.unitypackage> [<output_directory>]\n");
+			Sys.println("Usage:\n    unityunpack [--nometa] <.unitypackage> [<output_directory>]\n");
+			Sys.println("    --nometa   don't unpack meta files\n");
 			return;
 		}
 
-		var input = new haxe.io.Path(args[0]);
+		var nometa = false;
+
+		var args_start = 0;
+		while(true) {
+			var a = args[args_start];
+			if (a == "--nometa") {
+				nometa = true;
+			} else {
+				break;
+			}
+
+			++args_start;
+		}
+
+		var input = new haxe.io.Path(args[args_start]);
 		var output = './${input.file}';
 
-		if (args.length >= 2) {
-			output = args[1];
+		if (args.length >= args_start + 2) {
+			output = args[args_start + 1];
 		}
 
 		var inp = File.read(input.toString(), true);
@@ -68,6 +86,11 @@ class UnityUnpack
 				if (asset_content.match(fname)) {
 					a.content_offset = tarinput.position;
 					a.size = e.fileSize;
+				} else if (asset_meta.match(fname)) {
+					if (!nometa) {
+						a.meta_offset = tarinput.position;
+						a.meta_size = e.fileSize;
+					}
 				} else if (asset_path.match(fname)) {
 					var pos = tarinput.position;
 					var path = tarinput.readString(size);
@@ -91,18 +114,28 @@ class UnityUnpack
 		for (a in assets) {
 			trace('Unpacking ${a.path}');
 
-			if (a.size == null || a.content_offset == null) continue;
-
 			var file = haxe.io.Path.join([output, a.path]);
+
+			if ((a.size == null || a.content_offset == null) && 
+				(a.meta_size == null || a.meta_offset == null)) continue;
 
 			try {
 				sys.FileSystem.createDirectory(haxe.io.Path.directory(file));
 				
-				var output = sys.io.File.write(file, true);
-				tarinput.position = a.content_offset;
-				format.tools.IO.copy(tarinput, output, tmpbuf, a.size);
+				if (a.size != null || a.content_offset != null) {
+					var output = sys.io.File.write(file, true);
+					tarinput.position = a.content_offset;
+					format.tools.IO.copy(tarinput, output, tmpbuf, a.size);
+					output.close();
+				}
 
-				output.close();
+				if (a.meta_size != null && a.meta_offset != null) {
+					var output = sys.io.File.write(file + ".meta", true);
+					tarinput.position = a.meta_offset;
+					format.tools.IO.copy(tarinput, output, tmpbuf, a.meta_size);
+					output.close();
+				}
+
 			} catch (e : Dynamic) {
 				trace('Error unpacking [$file] :\n${Std.string(e)}');
 			}
