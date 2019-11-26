@@ -1,4 +1,6 @@
--neko unityunpack.n
+# -neko unityunpack.n
+-cpp build.cpp
 -main UnityUnpack
 -lib format
 -lib hxargs
+-dce full
